@@ -1,0 +1,29 @@
+meta {
+  name: get item
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/items/{{itemId}}
+  body: none
+  auth: none
+}
+
+headers {
+  x-gateway-token: {{gatewayToken}}
+  x-ou-id: {{ouId}}
+  x-branch-id: {{branchId}}
+  x-user-id: {{userId}}
+}
+
+script:post-response {
+  const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+  if (!body || !body.success || !body.data) return;
+  const data = body.data;
+  if (data.upd_date) bru.setEnvVar('updDate', data.upd_date);
+}
+
+docs {
+  Refreshes updDate from the server for optimistic locking on the next write.
+}

@@ -1,0 +1,37 @@
+meta {
+  name: put item (full replace)
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/items/{{itemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+  x-gateway-token: {{gatewayToken}}
+  x-ou-id: {{ouId}}
+  x-branch-id: {{branchId}}
+  x-user-id: {{userId}}
+}
+
+body:json {
+  {
+    "code": "{{itemCode}}",
+    "name": "Bruno test item (put)",
+    "description": null,
+    "status": "inactive",
+    "tags": [],
+    "upd_date": "{{updDate}}"
+  }
+}
+
+script:post-response {
+  const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+  if (!body || !body.success || !body.data) return;
+  const data = body.data;
+  if (data.upd_date) bru.setEnvVar('updDate', data.upd_date);
+}

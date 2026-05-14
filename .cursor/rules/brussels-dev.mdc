@@ -1,0 +1,132 @@
+---
+description: Brussels Dev Standard — กฎบังคับสำหรับการเขียน Backend API ในโปรเจคนี้
+globs: "src/**/*.js,scripts/**/*.js"
+alwaysApply: true
+---
+
+# Brussels Dev — Backend Coding Standard
+
+## กฎเหล็ก (อ่านก่อนเขียนโค้ดทุกครั้ง)
+
+**อ่านไฟล์ `agent.md` ใน root ของโปรเจคก่อนเสมอ** — ทุกมาตรฐานอยู่ในนั้น
+
+---
+
+## Architecture (4-Layer — ห้ามไขว้กัน)
+
+```
+Route → Validator → Controller → Service → Repository
+```
+
+| Layer | หน้าที่ | ห้าม |
+|---|---|---|
+| Route | wire middleware + controller | ใส่ logic |
+| Controller | รับ req → เรียก service → ส่ง response | ทำ DB query |
+| Service | business logic | ทำ DB query โดยตรง |
+| Repository | DB operations | เรียก service อื่น |
+
+---
+
+## Never Do (ห้ามเด็ดขาด)
+
+- `require()` / `module.exports` → ใช้ `import`/`export` เท่านั้น (ESM)
+- `console.log` → ใช้ `logger` จาก `src/config/logger.js`
+- `var` → ใช้ `const`/`let`
+- `.then()/.catch()` → ใช้ `async/await`
+- `res.json()` ใน catch → `next(err)` ไป errorHandler
+- Query โดยไม่มี `ou_id`+`branch_id`+`is_deleted:false` → ใส่ `tenantFilter()` ทุกครั้ง
+- Hard delete → Soft delete (`is_deleted: true`) เสมอ
+- Write โดยไม่มี Transaction → `session.withTransaction()`
+- Log แยก transaction → Log ต้องอยู่ใน transaction เดียวกับ write
+- `find().toArray()[0]` → `findOne()`
+- ส่ง Date เป็น Timestamp → `.toISOString()`
+- ส่งค่าเงินเป็น Number → แปลงเป็น String
+- Hardcode URI/Secret → อ่านจาก `process.env`
+
+---
+
+## Checklist ก่อน Finish (ตรวจทุกข้อ)
+
+### API & Response
+- [ ] URL: `/api/v1/<resources>` (plural, kebab-case)
+- [ ] ทุก endpoint ผ่าน auth middleware
+- [ ] ทุก endpoint มี Joi validation
+- [ ] Response: `{ success, code, message, data }` ทุกตัว
+- [ ] List มี `pagination` object
+- [ ] หาไม่เจอ → `DATA_NOT_FOUND` (HTTP 200) ไม่ใช่ 404
+- [ ] Error → `throw new AppError(...)` + `next(err)`
+
+### Database & Tenant
+- [ ] ทุก Query มี `ou_id` + `branch_id` + `is_deleted: false`
+- [ ] Field ใน DB เป็น `snake_case`
+- [ ] IDs เก็บเป็น `ObjectId` / ส่งใน response เป็น `String`
+- [ ] Date เก็บเป็น `Date` (UTC) / ส่งเป็น ISO 8601 String
+- [ ] ค่าเงินเก็บเป็น `Decimal128` / ส่งเป็น `String`
+- [ ] ใช้ `serializeDoc()` จาก `src/utils/format.js` ตอน map DB result
+
+### Audit Fields
+- [ ] CREATE: set ทั้ง `cr_*` และ `upd_*` ให้เท่ากัน
+- [ ] UPDATE/DELETE: update เฉพาะ `upd_*`
+- [ ] `cr_prog`/`upd_prog` = API path หรือ job name
+
+### Optimistic Locking
+- [ ] PUT, PATCH, DELETE รับ `upd_date` ใน request
+- [ ] filter ใน query มี `upd_date: originalUpdDate`
+- [ ] ถ้า `matchedCount === 0` → `AppError(409, 'CONFLICT', ...)`
+
+### Soft Delete
+- [ ] ลบด้วย `is_deleted: true`
+- [ ] set `deleted_by`, `deleted_date`, `deleted_prog` + `upd_*`
+
+### Transaction + Log
+- [ ] write อยู่ใน `session.withTransaction()`
+- [ ] Log อยู่ใน transaction เดียวกัน
+- [ ] INSERT: `changed_fields: null`, `snapshot_data: { old: null, new: payload }`
+- [ ] UPDATE: `changed_fields` บอก field ที่เปลี่ยน
+- [ ] DELETE: `changed_fields: null`, `snapshot_data: { old: doc, new: null }`
+
+---
+
+## Common Snippets
+
+### tenantFilter
+```javascript
+function tenantFilter(userContext) {
+  return {
+    ou_id:      new ObjectId(userContext.ou_id),
+    branch_id:  new ObjectId(userContext.branch_id),
+    is_deleted: false,
+  };
+}
+```
+
+### AppError
+```javascript
+throw new AppError(400, 'INVALID_PARAM', 'message');
+throw new AppError(409, 'CONFLICT', 'Code already exists');
+throw new AppError(401, 'UNAUTHORIZED', 'Invalid token');
+```
+
+### Duplicate Key (2-layer)
+```javascript
+const existing = await col.findOne({ ou_id, branch_id, code }, { session });
+if (existing) throw new AppError(409, 'CONFLICT', 'Code already exists');
+try {
+  await col.insertOne(payload, { session });
+} catch (err) {
+  if (err.code === 11000) throw new AppError(409, 'CONFLICT', 'Code already exists');
+  throw err;
+}
+```
+
+### Response
+```javascript
+// Success list
+res.status(200).json({ success: true, code: 'SUCCESS', message: null, data: [...], pagination: { page, limit, total, totalPages } });
+
+// Success single
+res.status(200).json({ success: true, code: 'SUCCESS', message: null, data: { ... } });
+
+// Not found
+res.status(200).json({ success: true, code: 'DATA_NOT_FOUND', message: null, data: null });
+```

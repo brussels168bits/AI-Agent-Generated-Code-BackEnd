@@ -1,0 +1,27 @@
+meta {
+  name: list items
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/items
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  limit: 10
+}
+
+headers {
+  x-gateway-token: {{gatewayToken}}
+  x-ou-id: {{ouId}}
+  x-branch-id: {{branchId}}
+  x-user-id: {{userId}}
+}
+
+docs {
+  Optional: add query params status, code, or name (see API spec).
+}

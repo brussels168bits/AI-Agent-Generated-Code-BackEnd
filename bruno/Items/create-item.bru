@@ -1,0 +1,47 @@
+meta {
+  name: create item
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/items
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+  x-gateway-token: {{gatewayToken}}
+  x-ou-id: {{ouId}}
+  x-branch-id: {{branchId}}
+  x-user-id: {{userId}}
+}
+
+script:pre-request {
+  bru.setVar('itemCode', 'BRU-' + Date.now());
+}
+
+body:json {
+  {
+    "code": "{{itemCode}}",
+    "name": "Bruno test item",
+    "description": null,
+    "status": "active",
+    "tags": ["bruno", "local"]
+  }
+}
+
+script:post-response {
+  const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+  if (!body || !body.success || !body.data) return;
+  const data = body.data;
+  if (data.id) bru.setEnvVar('itemId', data.id);
+  if (data.upd_date) bru.setEnvVar('updDate', data.upd_date);
+  const code = bru.getVar('itemCode');
+  if (code) bru.setEnvVar('itemCode', code);
+}
+
+docs {
+  Generates unique BRU-<timestamp> code; saves itemId, updDate, itemCode to the active environment.
+}

@@ -1,0 +1,13 @@
+---
+description: Bruno .bru collections — syntax, tests, and this repo’s API headers
+globs: "**/*.bru"
+alwaysApply: false
+---
+
+# Bruno (`.bru`) ในโปรเจกต์นี้
+
+- อ่านดัชนี/ลิงก์เอกสารจาก [docs.usebruno.com/llms.txt](https://docs.usebruno.com/llms.txt) เมื่อต้องการรายละเอียด bru-lang, scripts, tests, OpenCollection
+- คอลเลกชันตัวอย่างอยู่ที่โฟลเดอร์ `bruno/` — อย่าใส่ token จริงลง Git; ใช้ environment `local` หรือค่า placeholder + แก้บนเครื่องตัวเอง
+- **Items API**: ทุก request ใต้ `Items/` ต้องมี headers `x-gateway-token`, `x-ou-id`, `x-branch-id`, `x-user-id` ให้ตรงกับ `gateway-auth` และ `.env`
+- Response envelope และรหัสผลลัพธ์ (`SUCCESS`, `DATA_NOT_FOUND`, `INVALID_PARAM`, …) ให้สอดคล้องกับ `agent.md` หมวด 5 เมื่อเขียน `assert` / `tests` / ตัวอย่าง response
+- Prompt ฉบับเต็มจาก Bruno สำหรับ Cursor อยู่ที่ [ai-assistant-prompts/prompts/cursor](https://github.com/bruno-collections/ai-assistant-prompts/tree/main/prompts/cursor) — ใช้เสริมได้ถ้าต้องการความละเอียดสูงกว่ากฎไฟล์นี้
