@@ -6,9 +6,13 @@ alwaysApply: true
 
 # Brussels Dev — Backend Coding Standard
 
-## กฎเหล็ก (อ่านก่อนเขียนโค้ดทุกครั้ง)
+## Two-Tier Loading
 
-**อ่านไฟล์ `agent.md` ใน root ของโปรเจคก่อนเสมอ** — ทุกมาตรฐานอยู่ในนั้น
+- **Tier 1 (ไฟล์นี้):** Rules + Critical Snippets — โหลดอัตโนมัติทุกครั้ง
+- **Tier 2 (`agent-full.md`):** Full Code Templates — อ่านเพิ่มเมื่อ:
+  - สร้าง CRUD Module ใหม่ทั้งชุด
+  - สร้าง/แก้ไขไฟล์ infrastructure: `database.js`, `logger.js`, `error-handler.js`, `authenticate.js`, `validate.js`, `server.js`, `app.js`
+  - ต้องการดู full Transaction template หรือ serializeDoc function
 
 ---
 
@@ -87,9 +91,9 @@ Route → Validator → Controller → Service → Repository
 
 ---
 
-## Common Snippets
+## Critical Snippets
 
-### tenantFilter
+### tenantFilter (Repository — ใช้ทุก Query)
 ```javascript
 function tenantFilter(userContext) {
   return {
@@ -100,6 +104,99 @@ function tenantFilter(userContext) {
 }
 ```
 
+### Audit Fields — CREATE (ตั้ง cr_* + upd_* พร้อมกัน)
+```javascript
+const now = new Date();
+const payload = {
+  ...data,
+  ...tenantFilter(userContext),
+  cr_by:    userContext.username,
+  cr_date:  now,
+  cr_prog:  '/api/v1/<resource>',
+  upd_by:   userContext.username,  // ← ต้อง set ด้วย
+  upd_date: now,
+  upd_prog: '/api/v1/<resource>',
+};
+```
+
+### Audit Fields — UPDATE (upd_* เท่านั้น)
+```javascript
+const setPayload = {
+  ...updateData,
+  upd_by:   userContext.username,
+  upd_date: new Date(),
+  upd_prog: '/api/v1/<resource>',
+};
+```
+
+### Optimistic Locking check
+```javascript
+const filter = { _id: new ObjectId(id), ...tenantFilter(userContext), upd_date: original_upd_date };
+const oldDoc = await db.collection('...').findOne(filter, { session });
+if (!oldDoc) throw new AppError(409, 'CONFLICT', 'Data not found or already modified');
+```
+
+### Soft Delete payload
+```javascript
+{
+  is_deleted:   true,
+  deleted_by:   userContext.username,
+  deleted_date: now,
+  deleted_prog: '/api/v1/<resource>',
+  upd_by:       userContext.username,
+  upd_date:     now,
+  upd_prog:     '/api/v1/<resource>',
+}
+```
+
+### Transaction Shell
+```javascript
+const client = getClient();
+const session = client.startSession();
+try {
+  let result;
+  await session.withTransaction(async () => {
+    const db = getDatabase();
+    const now = new Date();
+    // 1. Main write operation
+    // 2. Insert log (same session)
+    result = ...;
+  });
+  return result;
+} finally {
+  await session.endSession();
+}
+```
+
+### Log Document
+```javascript
+await db.collection('<resource>_logs').insertOne({
+  ref_id:     docId,
+  ou_id:      new ObjectId(userContext.ou_id),
+  branch_id:  new ObjectId(userContext.branch_id),
+  action:     'INSERT' | 'UPDATE' | 'DELETE',
+  changed_fields: null | { field: { old: oldVal, new: newVal } },
+  snapshot_data:  { old: null | oldDoc, new: payload | null },
+  cr_by:      userContext.username,
+  cr_date:    now,
+  cr_prog:    '/api/v1/<resource>',
+}, { session });
+```
+
+### serializeDoc (แปลง Decimal128 + Date ก่อนส่ง response)
+```javascript
+import { serializeDoc } from '../../utils/format.js';
+
+// LIST
+data.map((d) => ({ id: d._id.toString(), ...serializeDoc(d) }))
+
+// DETAIL
+doc ? { id: doc._id.toString(), ...serializeDoc(doc) } : null
+
+// เก็บค่าเงินลง DB
+price: Decimal128.fromString(String(data.price))
+```
+
 ### AppError
 ```javascript
 throw new AppError(400, 'INVALID_PARAM', 'message');
@@ -107,7 +204,7 @@ throw new AppError(409, 'CONFLICT', 'Code already exists');
 throw new AppError(401, 'UNAUTHORIZED', 'Invalid token');
 ```
 
-### Duplicate Key (2-layer)
+### Duplicate Key (2-layer guard)
 ```javascript
 const existing = await col.findOne({ ou_id, branch_id, code }, { session });
 if (existing) throw new AppError(409, 'CONFLICT', 'Code already exists');
@@ -129,4 +226,7 @@ res.status(200).json({ success: true, code: 'SUCCESS', message: null, data: { ..
 
 // Not found
 res.status(200).json({ success: true, code: 'DATA_NOT_FOUND', message: null, data: null });
+
+// Error — ห้าม res.json() เอง
+} catch (err) { next(err); }
 ```
