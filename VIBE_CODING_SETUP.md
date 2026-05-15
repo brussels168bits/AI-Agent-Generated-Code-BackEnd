@@ -103,7 +103,7 @@ NEW_VAR=description
 3. พิมพ์:
 
 ```
-ดู prompt.md แล้ว implement ทั้งหมดตาม agent.md
+ดู prompt-items-crud.md แล้ว implement ทั้งหมดตาม agent.md
 สร้างไฟล์ครบทุก layer: route, validator, controller, service, repository
 รวม index script และ bruno collection
 ```
