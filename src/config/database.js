@@ -9,7 +9,7 @@ const DB_OPTIONS = {
   writeConcern: { w: 'majority', j: true, wtimeoutMS: 5000 },
   // primaryPreferred: reads go to secondary when available, primary as fallback.
   // Transactions automatically upgrade to primary within the session — no override needed.
-  readPreference: 'primaryPreferred',
+  readPreference: 'primary',
 };
 
 let client = null;
